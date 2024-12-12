@@ -10,12 +10,12 @@ use App\Http\Controllers\Auth\AuthController;
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login']);
-    Route::get('facebook/callback', [AuthController::class, 'facebookCallback']);
-    
-    // Protected routes
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('logout', [AuthController::class, 'logout']);
-    });
-}); 
+// Test route to verify routing is working
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working']);
+});
+
+// Authentication Routes
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum'); 

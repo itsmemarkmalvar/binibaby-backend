@@ -8,17 +8,22 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    /**
+     * Register a new user.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'method' => 'required|in:email,phone,facebook',
-            'email' => 'required_if:method,email|email',
-            'phone' => 'required_if:method,phone|string',
-            'password' => 'required_unless:method,facebook|string|min:6',
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'phone' => 'required|string|unique:users',
+            'password' => 'required|string|min:6',
         ]);
 
         if ($validator->fails()) {
@@ -26,85 +31,74 @@ class AuthController extends Controller
         }
 
         try {
-            $credentials = [];
-            
-            if ($request->method === 'email') {
-                $credentials = [
-                    'email' => $request->email,
-                    'password' => $request->password,
-                ];
-            } elseif ($request->method === 'phone') {
-                $credentials = [
-                    'phone' => $request->phone,
-                    'password' => $request->password,
-                ];
-            }
-
-            if (!empty($credentials) && Auth::attempt($credentials)) {
-                $user = Auth::user();
-                $token = $user->createToken('auth_token')->plainTextToken;
-
-                return response()->json([
-                    'token' => $token,
-                    'user' => $user,
-                ]);
-            }
-
-            return response()->json([
-                'message' => 'Invalid credentials',
-            ], 401);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'An error occurred during login',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    public function facebookCallback(Request $request)
-    {
-        try {
-            $facebookUser = Socialite::driver('facebook')->stateless()->user();
-            
-            $user = User::updateOrCreate(
-                ['facebook_id' => $facebookUser->id],
-                [
-                    'name' => $facebookUser->name,
-                    'email' => $facebookUser->email,
-                    'facebook_id' => $facebookUser->id,
-                    'password' => Hash::make(str_random(16)),
-                ]
-            );
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'password' => Hash::make($request->password),
+            ]);
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
+                'message' => 'Registration successful',
                 'token' => $token,
                 'user' => $user,
-            ]);
+            ], 201);
 
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'An error occurred during Facebook login',
+                'message' => 'Registration failed',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
+    /**
+     * Login user and create token.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return response()->json([
+                'message' => 'Invalid login credentials',
+            ], 401);
+        }
+
+        $user = User::where('email', $request->email)->firstOrFail();
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user' => $user,
+        ]);
+    }
+
+    /**
+     * Logout user (Revoke the token).
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function logout(Request $request)
     {
         try {
             $request->user()->currentAccessToken()->delete();
-            
-            return response()->json([
-                'message' => 'Successfully logged out',
-            ]);
+            return response()->json(['message' => 'Successfully logged out']);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'An error occurred during logout',
-                'error' => $e->getMessage(),
-            ], 500);
+            return response()->json(['message' => 'Error during logout'], 500);
         }
     }
 } 
